@@ -1,0 +1,310 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated device owner profile storing active role and family binding.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["parent", "child", "unset"],
+          "description": "Persisted role on this device."
+        },
+        "familyId": {
+          "type": "string",
+          "description": "ID of the linked family group."
+        },
+        "fcmToken": {
+          "type": "string",
+          "description": "Latest FCM registration token for lightweight data notifications."
+        },
+        "deviceModel": {
+          "type": "string",
+          "description": "Manufacturer and model name of the Android device."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when created via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when updated via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": ["userId", "role", "createdAt", "updatedAt"]
+    },
+    "Family": {
+      "title": "Family",
+      "description": "Parent-owned family scope for notification mirroring.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Display name of the family group."
+        },
+        "ownerUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the parent who created the family."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when created via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when updated via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": ["name", "ownerUid", "createdAt", "updatedAt"]
+    },
+    "FamilyMember": {
+      "title": "FamilyMember",
+      "description": "Member entry inside a family defining parent or child permissions and health telemetry.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the member."
+        },
+        "familyId": {
+          "type": "string",
+          "description": "Parent family identifier."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["parent", "child"],
+          "description": "Authorization role inside the family."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Human-readable name of the user or device."
+        },
+        "deviceModel": {
+          "type": "string",
+          "description": "Android manufacturer and device model."
+        },
+        "fcmToken": {
+          "type": "string",
+          "description": "FCM token for data-only alert delivery."
+        },
+        "listenerActive": {
+          "type": "boolean",
+          "description": "Whether NotificationListenerService is currently bound and healthy."
+        },
+        "companionTrusted": {
+          "type": "boolean",
+          "description": "Whether CompanionDeviceManager trusted association is active for Android 15+ OTP exemption."
+        },
+        "pairedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when paired via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when updated via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": ["uid", "familyId", "role", "displayName", "pairedAt", "updatedAt"]
+    },
+    "NotificationRecord": {
+      "title": "NotificationRecord",
+      "description": "Captured notification payload mirrored from a child device.",
+      "type": "object",
+      "properties": {
+        "sbnKey": {
+          "type": "string",
+          "description": "StatusBarNotification.key used for deterministic deduplication."
+        },
+        "familyId": {
+          "type": "string",
+          "description": "Owning family ID."
+        },
+        "childUid": {
+          "type": "string",
+          "description": "Auth UID of the child device that posted this record."
+        },
+        "packageName": {
+          "type": "string",
+          "description": "Source application package name."
+        },
+        "appLabel": {
+          "type": "string",
+          "description": "Normalized app display label (WhatsApp, Messages, Messenger, Telegram)."
+        },
+        "title": {
+          "type": "string",
+          "description": "Notification EXTRA_TITLE."
+        },
+        "text": {
+          "type": "string",
+          "description": "Notification EXTRA_TEXT or MessagingStyle concatenated text."
+        },
+        "bigText": {
+          "type": "string",
+          "description": "Notification EXTRA_BIG_TEXT if present."
+        },
+        "isMessagingStyle": {
+          "type": "boolean",
+          "description": "True when MessagingStyle messages were extracted."
+        },
+        "conversationTitle": {
+          "type": "string",
+          "description": "Group or conversation title from MessagingStyle."
+        },
+        "messages": {
+          "type": "array",
+          "description": "Bounded list of extracted MessagingStyle message entries."
+        },
+        "postTimeMs": {
+          "type": "integer",
+          "description": "Notification postTime in epoch milliseconds."
+        },
+        "dayKey": {
+          "type": "string",
+          "description": "ISO local date yyyy-MM-dd for day grouping."
+        },
+        "updateCount": {
+          "type": "integer",
+          "description": "Number of updates merged for the same StatusBarNotification.key."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when first created via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when updated via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": [
+        "sbnKey",
+        "familyId",
+        "childUid",
+        "packageName",
+        "appLabel",
+        "title",
+        "text",
+        "bigText",
+        "isMessagingStyle",
+        "conversationTitle",
+        "messages",
+        "postTimeMs",
+        "dayKey",
+        "updateCount",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ListenerAlert": {
+      "title": "ListenerAlert",
+      "description": "Alert pushed by the child watchdog when listener access is revoked or rebound.",
+      "type": "object",
+      "properties": {
+        "familyId": {
+          "type": "string",
+          "description": "Owning family ID."
+        },
+        "childUid": {
+          "type": "string",
+          "description": "Auth UID of the child device."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["listener_disabled", "listener_rebound", "battery_restricted"],
+          "description": "Alert category."
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable description of the listener state change."
+        },
+        "acknowledged": {
+          "type": "boolean",
+          "description": "Whether a parent has dismissed or acknowledged the alert."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when created via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when updated via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": ["familyId", "childUid", "type", "message", "acknowledged", "createdAt", "updatedAt"]
+    },
+    "PairingCode": {
+      "title": "PairingCode",
+      "description": "Short-lived 6-character code generated by Cloud Functions to link a child device to a family.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "6-character uppercase alphanumeric pairing code."
+        },
+        "familyId": {
+          "type": "string",
+          "description": "Target family ID."
+        },
+        "createdByUid": {
+          "type": "string",
+          "description": "Parent UID who requested the code."
+        },
+        "used": {
+          "type": "boolean",
+          "description": "Whether the code has been redeemed."
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Expiration timestamp."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when created."
+        }
+      },
+      "required": ["code", "familyId", "createdByUid", "used", "expiresAt", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Per-user private profile and persisted device role binding."
+    },
+    "/families/{familyId}": {
+      "schema": { "$ref": "#/entities/Family" },
+      "description": "Top-level family container owned by a parent account."
+    },
+    "/families/{familyId}/members/{memberUid}": {
+      "schema": { "$ref": "#/entities/FamilyMember" },
+      "description": "Family members subcollection enforcing parent read vs child write roles."
+    },
+    "/families/{familyId}/notifications/{recordId}": {
+      "schema": { "$ref": "#/entities/NotificationRecord" },
+      "description": "Mirrored notification records scoped by familyId."
+    },
+    "/families/{familyId}/alerts/{alertId}": {
+      "schema": { "$ref": "#/entities/ListenerAlert" },
+      "description": "Listener revocation and watchdog health alerts scoped by familyId."
+    },
+    "/pairing_codes/{code}": {
+      "schema": { "$ref": "#/entities/PairingCode" },
+      "description": "Server-managed 6-character companion pairing codes."
+    }
+  }
+}

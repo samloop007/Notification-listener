@@ -1,0 +1,286 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny everything unless explicitly permitted below
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function memberDoc(familyId) {
+      return get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid));
+    }
+
+    function isFamilyMember(familyId) {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid));
+    }
+
+    function isParentInFamily(familyId) {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)) &&
+             memberDoc(familyId).data.role == 'parent';
+    }
+
+    function isChildInFamily(familyId) {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)) &&
+             memberDoc(familyId).data.role == 'child';
+    }
+
+    // --- Validation Helpers ---
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.role in ['parent', 'child', 'unset'] &&
+             (!('familyId' in data) || (data.familyId is string && data.familyId.size() <= 128)) &&
+             (!('fcmToken' in data) || (data.fcmToken is string && data.fcmToken.size() <= 512)) &&
+             (!('deviceModel' in data) || (data.deviceModel is string && data.deviceModel.size() <= 128)) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidFamily(data) {
+      return data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
+             data.ownerUid is string && data.ownerUid.size() >= 1 && data.ownerUid.size() <= 128 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidFamilyMember(data) {
+      return data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 &&
+             data.familyId is string && data.familyId.size() >= 1 && data.familyId.size() <= 128 &&
+             data.role in ['parent', 'child'] &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+             (!('deviceModel' in data) || (data.deviceModel is string && data.deviceModel.size() <= 128)) &&
+             (!('fcmToken' in data) || (data.fcmToken is string && data.fcmToken.size() <= 512)) &&
+             (!('listenerActive' in data) || data.listenerActive is bool) &&
+             (!('companionTrusted' in data) || data.companionTrusted is bool) &&
+             isValidTimestamp(data.pairedAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidNotificationRecord(data) {
+      return data.sbnKey is string && data.sbnKey.size() >= 1 && data.sbnKey.size() <= 512 &&
+             data.familyId is string && data.familyId.size() >= 1 && data.familyId.size() <= 128 &&
+             data.childUid is string && data.childUid.size() >= 1 && data.childUid.size() <= 128 &&
+             data.packageName is string && data.packageName.size() >= 1 && data.packageName.size() <= 200 &&
+             data.appLabel is string && data.appLabel.size() >= 1 && data.appLabel.size() <= 64 &&
+             data.title is string && data.title.size() <= 500 &&
+             data.text is string && data.text.size() <= 4000 &&
+             data.bigText is string && data.bigText.size() <= 8000 &&
+             data.isMessagingStyle is bool &&
+             data.conversationTitle is string && data.conversationTitle.size() <= 256 &&
+             data.messages is list && data.messages.size() <= 25 &&
+             (data.messages.size() == 0 || data.messages[0] is string) &&
+             data.postTimeMs is int && data.postTimeMs >= 0 &&
+             data.dayKey is string && data.dayKey.size() == 10 &&
+             data.updateCount is int && data.updateCount >= 1 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidListenerAlert(data) {
+      return data.familyId is string && data.familyId.size() >= 1 && data.familyId.size() <= 128 &&
+             data.childUid is string && data.childUid.size() >= 1 && data.childUid.size() <= 128 &&
+             data.type in ['listener_disabled', 'listener_rebound', 'battery_restricted'] &&
+             data.message is string && data.message.size() >= 1 && data.message.size() <= 500 &&
+             data.acknowledged is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    // --- Collection Rules ---
+
+    // 1. User Profiles (strictly private to the authenticated user)
+    match /users/{userId} {
+      allow get, list: if isSignedIn() && request.auth.uid == userId;
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'role', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'role', 'familyId', 'fcmToken', 'deviceModel', 'createdAt', 'updatedAt']) &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming()) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['role', 'familyId', 'fcmToken', 'deviceModel', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+    }
+
+    // 2. Families (scoped container; member subcollection governs read/write access)
+    match /families/{familyId} {
+      allow get: if isValidId(familyId) && isFamilyMember(familyId);
+      allow list: if isSignedIn() && existing().ownerUid == request.auth.uid;
+
+      allow create: if isSignedIn() &&
+                       isValidId(familyId) &&
+                       incoming().ownerUid == request.auth.uid &&
+                       incoming().keys().hasAll(['name', 'ownerUid', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['name', 'ownerUid', 'createdAt', 'updatedAt']) &&
+                       isValidFamily(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(familyId) &&
+                       isValidFamily(incoming()) &&
+                       existing().ownerUid == request.auth.uid &&
+                       incoming().ownerUid == existing().ownerUid &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['name', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(familyId) && existing().ownerUid == request.auth.uid;
+
+      // 2a. Members subcollection
+      match /members/{memberUid} {
+        allow get: if isValidId(familyId) && isValidId(memberUid) && isFamilyMember(familyId);
+        allow list: if isValidId(familyId) && isFamilyMember(familyId);
+
+        // Parent family owner may register their own parent member doc on family creation.
+        // Child member docs are written exclusively by the Cloud Function Admin SDK upon code redemption.
+        allow create: if isSignedIn() &&
+                         isValidId(familyId) &&
+                         isValidId(memberUid) &&
+                         request.auth.uid == memberUid &&
+                         incoming().uid == request.auth.uid &&
+                         incoming().familyId == familyId &&
+                         incoming().role == 'parent' &&
+                         incoming().keys().hasAll(['uid', 'familyId', 'role', 'displayName', 'pairedAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['uid', 'familyId', 'role', 'displayName', 'deviceModel', 'fcmToken', 'listenerActive', 'companionTrusted', 'pairedAt', 'updatedAt']) &&
+                         isValidFamilyMember(incoming()) &&
+                         (
+                           (exists(/databases/$(database)/documents/families/$(familyId)) &&
+                            get(/databases/$(database)/documents/families/$(familyId)).data.ownerUid == request.auth.uid) ||
+                           (existsAfter(/databases/$(database)/documents/families/$(familyId)) &&
+                            getAfter(/databases/$(database)/documents/families/$(familyId)).data.ownerUid == request.auth.uid)
+                         );
+
+        allow update: if isSignedIn() &&
+                         isValidId(familyId) &&
+                         isValidId(memberUid) &&
+                         isValidFamilyMember(incoming()) &&
+                         request.auth.uid == memberUid &&
+                         isFamilyMember(familyId) &&
+                         incoming().uid == existing().uid &&
+                         incoming().familyId == existing().familyId &&
+                         incoming().role == existing().role &&
+                         incoming().pairedAt == existing().pairedAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'deviceModel', 'fcmToken', 'listenerActive', 'companionTrusted', 'updatedAt']);
+
+        allow delete: if isSignedIn() &&
+                         isValidId(familyId) &&
+                         isValidId(memberUid) &&
+                         isParentInFamily(familyId);
+      }
+
+      // 2b. Notifications subcollection:
+      // Requirement 7: A parent may read; only the child device may write.
+      // No client may read another family's data.
+      match /notifications/{recordId} {
+        allow get: if isValidId(familyId) && isValidId(recordId) && isParentInFamily(familyId);
+        allow list: if isValidId(familyId) && isParentInFamily(familyId);
+
+        allow create: if isSignedIn() &&
+                         isValidId(familyId) &&
+                         isValidId(recordId) &&
+                         incoming().familyId == familyId &&
+                         incoming().childUid == request.auth.uid &&
+                         incoming().keys().hasAll([
+                           'sbnKey', 'familyId', 'childUid', 'packageName', 'appLabel',
+                           'title', 'text', 'bigText', 'isMessagingStyle', 'conversationTitle',
+                           'messages', 'postTimeMs', 'dayKey', 'updateCount', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'sbnKey', 'familyId', 'childUid', 'packageName', 'appLabel',
+                           'title', 'text', 'bigText', 'isMessagingStyle', 'conversationTitle',
+                           'messages', 'postTimeMs', 'dayKey', 'updateCount', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidNotificationRecord(incoming()) &&
+                         isChildInFamily(familyId);
+
+        allow update: if isSignedIn() &&
+                         isValidId(familyId) &&
+                         isValidId(recordId) &&
+                         isValidNotificationRecord(incoming()) &&
+                         isChildInFamily(familyId) &&
+                         existing().childUid == request.auth.uid &&
+                         incoming().childUid == existing().childUid &&
+                         incoming().familyId == existing().familyId &&
+                         incoming().sbnKey == existing().sbnKey &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'packageName', 'appLabel', 'title', 'text', 'bigText',
+                           'isMessagingStyle', 'conversationTitle', 'messages',
+                           'postTimeMs', 'dayKey', 'updateCount', 'updatedAt'
+                         ]);
+
+        allow delete: if false;
+      }
+
+      // 2c. Listener health / revocation alerts subcollection:
+      // Child writes alerts; parent reads & acknowledges them.
+      match /alerts/{alertId} {
+        allow get: if isValidId(familyId) && isValidId(alertId) && isParentInFamily(familyId);
+        allow list: if isValidId(familyId) && isParentInFamily(familyId);
+
+        allow create: if isSignedIn() &&
+                         isValidId(familyId) &&
+                         isValidId(alertId) &&
+                         incoming().familyId == familyId &&
+                         incoming().childUid == request.auth.uid &&
+                         incoming().acknowledged == false &&
+                         incoming().keys().hasAll(['familyId', 'childUid', 'type', 'message', 'acknowledged', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['familyId', 'childUid', 'type', 'message', 'acknowledged', 'createdAt', 'updatedAt']) &&
+                         isValidListenerAlert(incoming()) &&
+                         isChildInFamily(familyId);
+
+        allow update: if isSignedIn() &&
+                         isValidId(familyId) &&
+                         isValidId(alertId) &&
+                         isValidListenerAlert(incoming()) &&
+                         isParentInFamily(familyId) &&
+                         incoming().familyId == existing().familyId &&
+                         incoming().childUid == existing().childUid &&
+                         incoming().type == existing().type &&
+                         incoming().message == existing().message &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['acknowledged', 'updatedAt']);
+
+        allow delete: if false;
+      }
+    }
+
+    // 3. Pairing codes: managed via Cloud Functions (Admin SDK).
+    // Only the parent creator may inspect their own code; clients cannot list or spoof redemption.
+    match /pairing_codes/{code} {
+      allow get: if isSignedIn() && isValidId(code) && existing().createdByUid == request.auth.uid;
+      allow list, write: if false;
+    }
+  }
+}

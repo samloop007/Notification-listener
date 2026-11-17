@@ -1,0 +1,6 @@
+{
+  "name": "KinEcho",
+  "description": "Parental notification-mirroring app with Child listener service, offline Room queue, Watchdog monitoring, CompanionDeviceManager pairing, and Parent read-only feed.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

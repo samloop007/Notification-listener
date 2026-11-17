@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Network & Sync -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Foreground Service (specialUse) & Boot Persistence -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- Android 15+ (API 35) Sensitive Notification Exemption (requires CompanionDeviceManager association or appops allow) -->
+    <uses-permission android:name="android.permission.RECEIVE_SENSITIVE_NOTIFICATIONS" />
+
+    <!-- CompanionDeviceManager support (optional hardware feature so all devices remain eligible) -->
+    <uses-feature
+        android:name="android.software.companion_device_setup"
+        android:required="false" />
+
+    <!-- Least-privilege <queries> for monitored chat apps (Android 11+ API 30 package visibility) -->
+    <queries>
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
+        <package android:name="com.google.android.apps.messaging" />
+        <package android:name="com.android.mms" />
+        <package android:name="com.samsung.android.messaging" />
+        <package android:name="com.facebook.orca" />
+        <package android:name="org.telegram.messenger" />
+        <package android:name="org.telegram.messenger.web" />
+    </queries>
+
+    <application
+        android:name=".KinEchoApp"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.MyApplication">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.MyApplication">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Child NotificationListenerService -->
+        <service
+            android:name=".service.NotifListener"
+            android:exported="true"
+            android:label="@string/notification_listener_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.notification.default_filter_types"
+                android:value="conversations|alerting|silent" />
+        </service>
+
+        <!-- Child Watchdog Foreground Service (specialUse requires PROPERTY_SPECIAL_USE_FGS_SUBTYPE on API 34+) -->
+        <service
+            android:name=".service.WatchdogService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Monitors NotificationListenerService binding health and issues requestRebind() or parent revocation alerts when killed by OEM power managers." />
+        </service>
+
+        <!-- FCM Data-Only Receiver ({type, recordId}) -->
+        <service
+            android:name=".service.KinEchoMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- Restart WatchdogService on device boot or app update when role == CHILD -->
+        <receiver
+            android:name=".service.BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Disable default WorkManagerInitializer so KinEchoApp uses HiltWorkerFactory -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
+    </application>
+
+</manifest>

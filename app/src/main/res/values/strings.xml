@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">KinEcho</string>
+    <string name="notification_listener_label">KinEcho Notification Mirror</string>
+    <string name="watchdog_channel_name">KinEcho Protection Service</string>
+    <string name="watchdog_channel_desc">Keeps notification mirroring active and monitors listener access</string>
+    <string name="alerts_channel_name">KinEcho Guardian Alerts</string>
+    <string name="alerts_channel_desc">Alerts when child notification access is disabled or interrupted</string>
+    <string name="sign_in_with_google">Sign in with Google</string>
+    <string name="role_child_title">Child Device</string>
+    <string name="role_child_subtitle">Captures selected chat notifications and syncs them securely to your linked parent.</string>
+    <string name="role_parent_title">Parent Viewer</string>
+    <string name="role_parent_subtitle">Read-only notification feed grouped by day with instant alerts if access is disabled.</string>
+</resources>
